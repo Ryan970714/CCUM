@@ -12,6 +12,7 @@
     <div class="topbar-title">
       <h1>Claude Code 用量儀表板</h1>
       <p id="sync-status" class="sync-status">連線中…</p>
+      <p id="fetch-status" class="sync-status">&nbsp;</p>
     </div>
     <nav class="range-selector" id="range-selector">
       <button data-range="7d">7 天</button>
@@ -22,6 +23,24 @@
   </header>
 
   <main>
+    <section class="card week-card" id="week-card">
+      <h2>本週用量(自週一起)</h2>
+      <div class="week-body">
+        <div class="stat-tile">
+          <span class="stat-label">本週 Token 數</span>
+          <span class="stat-value" id="week-tokens">—</span>
+        </div>
+        <div class="stat-tile">
+          <span class="stat-label">本週預估費用</span>
+          <span class="stat-value" id="week-cost">—</span>
+        </div>
+        <div class="stat-tile">
+          <span class="stat-label">與上週相比</span>
+          <span class="stat-value" id="week-change">—</span>
+        </div>
+      </div>
+    </section>
+
     <section class="stat-grid" id="stat-grid" aria-label="用量統計">
       <div class="stat-tile">
         <span class="stat-label">總 Token 數</span>
@@ -75,6 +94,18 @@
           <table id="model-table">
             <thead>
               <tr><th>模型</th><th>次數</th><th>Token 數</th><th>預估費用</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>依裝置分類</h2>
+        <div class="table-wrap">
+          <table id="device-table">
+            <thead>
+              <tr><th>裝置</th><th>Token 數</th><th>預估費用</th><th>最近活動</th></tr>
             </thead>
             <tbody></tbody>
           </table>

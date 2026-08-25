@@ -154,6 +154,7 @@ function lineToEvent(obj, filePath) {
     cache_creation_1h_tokens: usage.cache_creation?.ephemeral_1h_input_tokens || 0,
     thinking_tokens: usage.output_tokens_details?.thinking_tokens || 0,
     service_tier: usage.service_tier || null,
+    device_hostname: os.hostname(),
   };
 }
 

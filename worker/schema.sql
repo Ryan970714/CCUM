@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS usage_events (
   cache_creation_1h_tokens       INTEGER NOT NULL DEFAULT 0,
   thinking_tokens                INTEGER NOT NULL DEFAULT 0,
   service_tier                   TEXT,
+  device_hostname                TEXT,
   ingested_at                    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -31,3 +32,4 @@ CREATE INDEX IF NOT EXISTS idx_usage_events_date    ON usage_events(event_date);
 CREATE INDEX IF NOT EXISTS idx_usage_events_project ON usage_events(project_name);
 CREATE INDEX IF NOT EXISTS idx_usage_events_session ON usage_events(session_id);
 CREATE INDEX IF NOT EXISTS idx_usage_events_model   ON usage_events(model);
+CREATE INDEX IF NOT EXISTS idx_usage_events_device  ON usage_events(device_hostname);

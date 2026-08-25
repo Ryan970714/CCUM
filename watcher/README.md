@@ -2,6 +2,15 @@
 
 本機常駐程式,監看 `~/.claude/projects/**/*.jsonl`(Claude Code 的對話紀錄,含 subagent 的巢狀檔案),將 token 用量即時同步到 `cc-usage-dashboard` Worker。
 
+## 多裝置
+
+這個監控程式天生就支援多台電腦同時跑,不需要額外設定——每台裝置各自讀自己的 `~/.claude/projects`,獨立送到同一個 Worker,資料庫用 `message.id` 去重,不會重複計算,還會各自標上 `device_hostname`,在儀表板的「依裝置分類」表格裡分開統計。
+
+要在另一台電腦上啟用:
+1. 把整個 `CCUM` 專案(或至少 `watcher/` 這個資料夾)複製過去
+2. 照下面「設定」的步驟做一次,`config.json` 的 `workerUrl` 填**同一個**網址(`https://cc-usage-dashboard.rtnexen.workers.dev`)
+3. 注意:啟動資料夾機制是「使用者登入時」觸發,如果那台電腦開機後沒人登入 Windows 帳號,監控程式就不會啟動——單純開機、停在鎖定畫面是不夠的。
+
 ## 設定
 
 1. Worker 部署完成、拿到網址後,複製 `config.example.json` 為 `config.json`,把 `workerUrl` 換成實際網址:

@@ -5,8 +5,9 @@ const INSERT_SQL = `
     message_id, line_uuid, session_id, project_cwd, project_name,
     is_subagent, agent_type, model, git_branch, timestamp, event_date,
     input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens,
-    cache_creation_5m_tokens, cache_creation_1h_tokens, thinking_tokens, service_tier
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    cache_creation_5m_tokens, cache_creation_1h_tokens, thinking_tokens, service_tier,
+    device_hostname
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 const REQUIRED_FIELDS = [
@@ -50,7 +51,8 @@ function toStatement(db, ev) {
       ev.cache_creation_5m_tokens ?? 0,
       ev.cache_creation_1h_tokens ?? 0,
       ev.thinking_tokens ?? 0,
-      ev.service_tier ?? null
+      ev.service_tier ?? null,
+      ev.device_hostname ?? null
     );
 }
 

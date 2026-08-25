@@ -87,6 +87,28 @@ async function fetchByProjectByModel(db, cutoff) {
   return results;
 }
 
+async function fetchByDeviceByModel(db, cutoff) {
+  const where = cutoff ? "WHERE event_date >= ?" : "";
+  const binds = cutoff ? [cutoff] : [];
+  const sql = `
+    SELECT COALESCE(device_hostname, '(unknown)') as device_hostname, model,
+      COUNT(*) as event_count,
+      MAX(timestamp) as last_active,
+      SUM(input_tokens) as input_tokens,
+      SUM(output_tokens) as output_tokens,
+      SUM(cache_creation_input_tokens) as cache_creation_input_tokens,
+      SUM(cache_read_input_tokens) as cache_read_input_tokens,
+      SUM(cache_creation_5m_tokens) as cache_creation_5m_tokens,
+      SUM(cache_creation_1h_tokens) as cache_creation_1h_tokens,
+      SUM(thinking_tokens) as thinking_tokens
+    FROM usage_events
+    ${where}
+    GROUP BY device_hostname, model
+  `;
+  const { results } = await db.prepare(sql).bind(...binds).all();
+  return results;
+}
+
 async function fetchByModel(db, cutoff) {
   const where = cutoff ? "WHERE event_date >= ?" : "";
   const binds = cutoff ? [cutoff] : [];
@@ -136,6 +158,73 @@ async function fetchRecentSessions(db, cutoff, limit = 20) {
   return results;
 }
 
+// Monday-start calendar week, based on the Worker's (UTC) clock. event_date strings are
+// plain YYYY-MM-DD written using the watcher machine's local calendar day, so this is a
+// simple string/date comparison — a rare near-midnight mismatch across timezones is an
+// acceptable trade-off for not needing per-viewer timezone plumbing.
+function mondayOf(date) {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const day = d.getUTCDay(); // 0 = Sunday
+  const diff = day === 0 ? -6 : 1 - day; // shift back to Monday
+  d.setUTCDate(d.getUTCDate() + diff);
+  return d;
+}
+
+function toDateStr(d) {
+  return d.toISOString().slice(0, 10);
+}
+
+async function fetchRangeByModel(db, startDate, endDateExclusive) {
+  const sql = `
+    SELECT model,
+      SUM(input_tokens) as input_tokens,
+      SUM(output_tokens) as output_tokens,
+      SUM(cache_creation_input_tokens) as cache_creation_input_tokens,
+      SUM(cache_read_input_tokens) as cache_read_input_tokens,
+      SUM(cache_creation_5m_tokens) as cache_creation_5m_tokens,
+      SUM(cache_creation_1h_tokens) as cache_creation_1h_tokens,
+      SUM(thinking_tokens) as thinking_tokens,
+      COUNT(*) as event_count
+    FROM usage_events
+    WHERE event_date >= ? AND event_date < ?
+    GROUP BY model
+  `;
+  const { results } = await db.prepare(sql).bind(startDate, endDateExclusive).all();
+  const totals = emptyTotals();
+  for (const row of results) addRow(totals, row);
+  return {
+    total_tokens: totals.total_tokens,
+    estimated_cost_usd: Math.round(totals.estimated_cost_usd * 100) / 100,
+    event_count: totals.event_count,
+  };
+}
+
+async function getWeeklyComparison(db) {
+  const now = new Date();
+  const thisMonday = mondayOf(now);
+  const lastMonday = new Date(thisMonday);
+  lastMonday.setUTCDate(lastMonday.getUTCDate() - 7);
+  const tomorrow = new Date(now);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1); // exclusive upper bound for "up to now"
+
+  const [currentWeek, previousWeek] = await Promise.all([
+    fetchRangeByModel(db, toDateStr(thisMonday), toDateStr(tomorrow)),
+    fetchRangeByModel(db, toDateStr(lastMonday), toDateStr(thisMonday)),
+  ]);
+
+  const change =
+    previousWeek.total_tokens > 0
+      ? Math.round(((currentWeek.total_tokens - previousWeek.total_tokens) / previousWeek.total_tokens) * 1000) / 10
+      : null; // no prior-week data to compare against
+
+  return {
+    week_start: toDateStr(thisMonday),
+    current_week: currentWeek,
+    previous_week: { ...previousWeek, week_start: toDateStr(lastMonday) },
+    change_pct: change,
+  };
+}
+
 async function fetchLastEventAt(db) {
   const { results } = await db
     .prepare("SELECT MAX(timestamp) as last_event_at FROM usage_events")
@@ -146,13 +235,16 @@ async function fetchLastEventAt(db) {
 export async function getUsageSummary(db, range) {
   const cutoff = cutoffDate(range);
 
-  const [dailyByModel, projectByModel, byModel, recentSessions, lastEventAt] = await Promise.all([
-    fetchDailyByModel(db, cutoff),
-    fetchByProjectByModel(db, cutoff),
-    fetchByModel(db, cutoff),
-    fetchRecentSessions(db, cutoff),
-    fetchLastEventAt(db),
-  ]);
+  const [dailyByModel, projectByModel, deviceByModel, byModel, recentSessions, lastEventAt, weekly] =
+    await Promise.all([
+      fetchDailyByModel(db, cutoff),
+      fetchByProjectByModel(db, cutoff),
+      fetchByDeviceByModel(db, cutoff),
+      fetchByModel(db, cutoff),
+      fetchRecentSessions(db, cutoff),
+      fetchLastEventAt(db),
+      getWeeklyComparison(db), // always all-time-window-independent — "this week" vs "last week"
+    ]);
 
   // Re-aggregate (date, model) rows -> one entry per date, and a grand total.
   const dailyMap = new Map();
@@ -181,6 +273,22 @@ export async function getUsageSummary(db, range) {
     if (row.last_active > acc.last_active) acc.last_active = row.last_active;
   }
   const byProject = [...projectMap.values()].sort((a, b) => b.total_tokens - a.total_tokens);
+
+  // Re-aggregate (device, model) rows -> one entry per device.
+  const deviceMap = new Map();
+  for (const row of deviceByModel) {
+    if (!deviceMap.has(row.device_hostname)) {
+      deviceMap.set(row.device_hostname, {
+        device_hostname: row.device_hostname,
+        last_active: row.last_active,
+        ...emptyTotals(),
+      });
+    }
+    const acc = deviceMap.get(row.device_hostname);
+    addRow(acc, row);
+    if (row.last_active > acc.last_active) acc.last_active = row.last_active;
+  }
+  const byDevice = [...deviceMap.values()].sort((a, b) => b.total_tokens - a.total_tokens);
 
   return {
     generated_at: new Date().toISOString(),
@@ -211,8 +319,16 @@ export async function getUsageSummary(db, range) {
       estimated_cost_usd: Math.round(p.estimated_cost_usd * 100) / 100,
       last_active: p.last_active,
     })),
+    by_device: byDevice.map((d) => ({
+      device_hostname: d.device_hostname,
+      event_count: d.event_count,
+      total_tokens: d.total_tokens,
+      estimated_cost_usd: Math.round(d.estimated_cost_usd * 100) / 100,
+      last_active: d.last_active,
+    })),
     by_model: byModel,
     recent_sessions: recentSessions,
     last_event_at: lastEventAt,
+    weekly,
   };
 }

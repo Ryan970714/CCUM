@@ -146,12 +146,20 @@ main {
 
 .two-col {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 20px;
 }
 
+.week-card .week-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.week-change-up { color: var(--warn); }
+.week-change-down { color: var(--ok); }
+
 @media (max-width: 720px) {
-  .two-col { grid-template-columns: 1fr; }
   .topbar { flex-direction: column; align-items: flex-start; }
 }
 

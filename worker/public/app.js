@@ -89,6 +89,27 @@ function relativeTime(iso) {
   return `${day} 天前`;
 }
 
+function renderWeekly(weekly) {
+  document.getElementById("week-tokens").textContent = fmtInt.format(weekly.current_week.total_tokens || 0);
+  document.getElementById("week-cost").textContent = fmtUsd(weekly.current_week.estimated_cost_usd);
+
+  const changeEl = document.getElementById("week-change");
+  if (weekly.change_pct === null) {
+    changeEl.textContent = "上週無資料";
+    changeEl.className = "stat-value";
+  } else {
+    const sign = weekly.change_pct >= 0 ? "+" : "";
+    changeEl.textContent = `${sign}${weekly.change_pct}%`;
+    changeEl.className = "stat-value " + (weekly.change_pct >= 0 ? "week-change-up" : "week-change-down");
+  }
+}
+
+function renderFetchStatus() {
+  const now = new Date();
+  document.getElementById("fetch-status").textContent =
+    `頁面更新於:${now.toLocaleTimeString("zh-TW", { hour12: false })}`;
+}
+
 function renderSyncStatus(lastEventAt) {
   const el = document.getElementById("sync-status");
   if (!lastEventAt) {
@@ -119,6 +140,8 @@ async function loadUsage(range) {
   renderStats(data.totals);
   renderChart(data.daily);
   renderSyncStatus(data.last_event_at);
+  renderWeekly(data.weekly);
+  renderFetchStatus();
 
   renderTable(
     "project-table",
@@ -140,6 +163,18 @@ async function loadUsage(range) {
       (r) => fmtInt.format(r.event_count),
       (r) => fmtInt.format(r.total_tokens),
       (r) => fmtUsd(r.estimated_cost_usd),
+    ],
+    "尚無資料"
+  );
+
+  renderTable(
+    "device-table",
+    data.by_device,
+    [
+      (r) => esc(r.device_hostname),
+      (r) => fmtInt.format(r.total_tokens),
+      (r) => fmtUsd(r.estimated_cost_usd),
+      (r) => relativeTime(r.last_active),
     ],
     "尚無資料"
   );
