@@ -1,4 +1,4 @@
-import { getUsageSummary } from "./queries.js";
+import { getUsageSummary, getLatestRateLimitSnapshot } from "./queries.js";
 
 const INSERT_SQL = `
   INSERT OR IGNORE INTO usage_events (
@@ -94,12 +94,62 @@ async function handleIngest(request, env) {
   });
 }
 
+const RATE_LIMIT_INSERT_SQL = `
+  INSERT INTO rate_limit_snapshots (
+    captured_at, device_hostname,
+    five_hour_utilization, five_hour_resets_at,
+    seven_day_utilization, seven_day_resets_at,
+    seven_day_sonnet_utilization, seven_day_sonnet_resets_at,
+    seven_day_opus_utilization, seven_day_opus_resets_at,
+    raw_json
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`;
+
+async function handleRateLimitIngest(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: "invalid JSON body" }, { status: 400 });
+  }
+  if (!body || typeof body !== "object") {
+    return json({ error: "missing body" }, { status: 400 });
+  }
+
+  const fh = body.five_hour || {};
+  const sd = body.seven_day || {};
+  const sdSonnet = body.seven_day_sonnet || {};
+  const sdOpus = body.seven_day_opus || {};
+
+  await env.DB.prepare(RATE_LIMIT_INSERT_SQL)
+    .bind(
+      body.captured_at || new Date().toISOString(),
+      body.device_hostname ?? null,
+      fh.utilization ?? null,
+      fh.resets_at ?? null,
+      sd.utilization ?? null,
+      sd.resets_at ?? null,
+      sdSonnet.utilization ?? null,
+      sdSonnet.resets_at ?? null,
+      sdOpus.utilization ?? null,
+      sdOpus.resets_at ?? null,
+      JSON.stringify(body)
+    )
+    .run();
+
+  return json({ ok: true });
+}
+
 async function handleUsage(request, env) {
   const url = new URL(request.url);
   const range = url.searchParams.get("range") || "30d";
   const allowed = new Set(["7d", "30d", "90d", "all"]);
   const safeRange = allowed.has(range) ? range : "30d";
-  const summary = await getUsageSummary(env.DB, safeRange);
+  const [summary, rateLimits] = await Promise.all([
+    getUsageSummary(env.DB, safeRange),
+    getLatestRateLimitSnapshot(env.DB),
+  ]);
+  summary.rate_limits = rateLimits;
   return json(summary);
 }
 
@@ -112,6 +162,9 @@ export default {
     }
     if (url.pathname === "/api/ingest" && request.method === "POST") {
       return handleIngest(request, env);
+    }
+    if (url.pathname === "/api/rate-limit" && request.method === "POST") {
+      return handleRateLimitIngest(request, env);
     }
     if (url.pathname === "/api/usage" && request.method === "GET") {
       return handleUsage(request, env);

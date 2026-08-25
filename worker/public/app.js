@@ -89,6 +89,75 @@ function relativeTime(iso) {
   return `${day} 天前`;
 }
 
+const QUOTA_BARS = [
+  { key: "five_hour", label: "5 小時 Session", windowMs: 5 * 60 * 60 * 1000 },
+  { key: "seven_day", label: "7 天 Weekly", windowMs: 7 * 24 * 60 * 60 * 1000 },
+  { key: "seven_day_sonnet", label: "Sonnet 週配額", windowMs: 7 * 24 * 60 * 60 * 1000 },
+  { key: "seven_day_opus", label: "Opus 週配額", windowMs: 7 * 24 * 60 * 60 * 1000 },
+];
+
+function formatResetIn(iso) {
+  if (!iso) return "";
+  const diffMs = new Date(iso).getTime() - Date.now();
+  if (diffMs <= 0) return "即將重置";
+  const min = Math.round(diffMs / 60000);
+  if (min < 60) return `${min} 分鐘後重置`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr} 小時後重置`;
+  const day = Math.floor(hr / 24);
+  return `${day} 天後重置`;
+}
+
+function renderQuota(rateLimits) {
+  const body = document.getElementById("quota-body");
+  const capturedEl = document.getElementById("quota-captured");
+
+  if (!rateLimits) {
+    body.innerHTML = '<p class="quota-empty">尚無資料,等待監控程式第一次查詢…</p>';
+    capturedEl.textContent = " ";
+    return;
+  }
+
+  const rows = [];
+  for (const bar of QUOTA_BARS) {
+    const info = rateLimits[bar.key];
+    if (!info || info.utilization === null || info.utilization === undefined) continue;
+
+    const pct = Math.max(0, Math.min(100, info.utilization));
+    let pacePct = null;
+    let overPace = false;
+    if (info.resets_at) {
+      const resetsAt = new Date(info.resets_at).getTime();
+      const windowStart = resetsAt - bar.windowMs;
+      const elapsedFraction = Math.max(0, Math.min(1, (Date.now() - windowStart) / bar.windowMs));
+      pacePct = elapsedFraction * 100;
+      overPace = pct > pacePct + 5; // small margin so it doesn't flicker red at the start
+    }
+
+    rows.push(`
+      <div class="quota-bar-row">
+        <div class="quota-bar-label">
+          <span class="name">${esc(bar.label)} — ${pct.toFixed(0)}%</span>
+          <span class="reset">${esc(formatResetIn(info.resets_at))}</span>
+        </div>
+        <div class="quota-bar-track">
+          <div class="quota-bar-fill${overPace ? " over-pace" : ""}" style="width:${pct}%"></div>
+          ${pacePct !== null ? `<div class="quota-bar-pace-marker" style="left:${pacePct}%"></div>` : ""}
+        </div>
+      </div>
+    `);
+  }
+
+  body.innerHTML = rows.length
+    ? rows.join("")
+    : '<p class="quota-empty">尚無資料,等待監控程式第一次查詢…</p>';
+
+  const diffMin = (Date.now() - new Date(rateLimits.captured_at).getTime()) / 60000;
+  capturedEl.textContent = `資料擷取於:${relativeTime(rateLimits.captured_at)}`;
+  capturedEl.className = "sync-status " + (diffMin > 10 ? "stale" : "fresh");
+  if (diffMin > 10) capturedEl.textContent += "(可能過期)";
+}
+
 function renderWeekly(weekly) {
   document.getElementById("week-tokens").textContent = fmtInt.format(weekly.current_week.total_tokens || 0);
   document.getElementById("week-cost").textContent = fmtUsd(weekly.current_week.estimated_cost_usd);
@@ -141,6 +210,7 @@ async function loadUsage(range) {
   renderChart(data.daily);
   renderSyncStatus(data.last_event_at);
   renderWeekly(data.weekly);
+  renderQuota(data.rate_limits);
   renderFetchStatus();
 
   renderTable(

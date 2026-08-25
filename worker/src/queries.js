@@ -232,6 +232,28 @@ async function fetchLastEventAt(db) {
   return results[0]?.last_event_at || null;
 }
 
+export async function getLatestRateLimitSnapshot(db) {
+  const { results } = await db
+    .prepare("SELECT * FROM rate_limit_snapshots ORDER BY captured_at DESC LIMIT 1")
+    .all();
+  const row = results[0];
+  if (!row) return null;
+  return {
+    captured_at: row.captured_at,
+    device_hostname: row.device_hostname,
+    five_hour: { utilization: row.five_hour_utilization, resets_at: row.five_hour_resets_at },
+    seven_day: { utilization: row.seven_day_utilization, resets_at: row.seven_day_resets_at },
+    seven_day_sonnet: {
+      utilization: row.seven_day_sonnet_utilization,
+      resets_at: row.seven_day_sonnet_resets_at,
+    },
+    seven_day_opus: {
+      utilization: row.seven_day_opus_utilization,
+      resets_at: row.seven_day_opus_resets_at,
+    },
+  };
+}
+
 export async function getUsageSummary(db, range) {
   const cutoff = cutoffDate(range);
 

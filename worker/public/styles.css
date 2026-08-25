@@ -150,6 +150,70 @@ main {
   gap: 20px;
 }
 
+.quota-disclaimer {
+  margin: 0 0 14px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.quota-empty {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.quota-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.quota-bar-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.quota-bar-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+}
+
+.quota-bar-label .name { font-weight: 600; }
+.quota-bar-label .reset { color: var(--text-muted); font-size: 0.78rem; }
+
+.quota-bar-track {
+  position: relative;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.quota-bar-fill {
+  position: absolute;
+  inset: 0;
+  width: 0%;
+  background: var(--accent);
+  border-radius: 7px;
+  transition: width 0.4s ease;
+}
+
+.quota-bar-fill.over-pace { background: var(--warn); }
+
+.quota-bar-pace-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+@media (prefers-color-scheme: dark) {
+  .quota-bar-pace-marker { background: rgba(255, 255, 255, 0.45); }
+}
+
 .week-card .week-body {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));

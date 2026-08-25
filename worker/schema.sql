@@ -33,3 +33,24 @@ CREATE INDEX IF NOT EXISTS idx_usage_events_project ON usage_events(project_name
 CREATE INDEX IF NOT EXISTS idx_usage_events_session ON usage_events(session_id);
 CREATE INDEX IF NOT EXISTS idx_usage_events_model   ON usage_events(model);
 CREATE INDEX IF NOT EXISTS idx_usage_events_device  ON usage_events(device_hostname);
+
+-- Periodic snapshots of Anthropic's account-level 5h/7d rate-limit utilization, polled by
+-- the watcher from the undocumented https://api.anthropic.com/api/oauth/usage endpoint
+-- using the OAuth token Claude Code already stores locally. Append-only log (not just a
+-- single latest row) so the dashboard could later chart utilization over time if wanted.
+CREATE TABLE IF NOT EXISTS rate_limit_snapshots (
+  id                              INTEGER PRIMARY KEY AUTOINCREMENT,
+  captured_at                     TEXT NOT NULL,
+  device_hostname                 TEXT,
+  five_hour_utilization           REAL,
+  five_hour_resets_at             TEXT,
+  seven_day_utilization           REAL,
+  seven_day_resets_at             TEXT,
+  seven_day_sonnet_utilization    REAL,
+  seven_day_sonnet_resets_at      TEXT,
+  seven_day_opus_utilization      REAL,
+  seven_day_opus_resets_at        TEXT,
+  raw_json                        TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_rate_limit_captured ON rate_limit_snapshots(captured_at);

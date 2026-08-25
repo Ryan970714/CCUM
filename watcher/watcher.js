@@ -19,6 +19,7 @@ import os from "node:os";
 
 const SCRIPT_DIR = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1"));
 const PROJECTS_DIR = path.join(os.homedir(), ".claude", "projects");
+const CREDENTIALS_FILE = path.join(os.homedir(), ".claude", ".credentials.json");
 const STATE_FILE = path.join(SCRIPT_DIR, "state.json");
 const QUEUE_FILE = path.join(SCRIPT_DIR, "pending-queue.jsonl");
 const FLUSHING_FILE = path.join(SCRIPT_DIR, "pending-queue.flushing.jsonl");
@@ -30,6 +31,17 @@ const FALLBACK_RESCAN_MS = 20_000;
 const HEARTBEAT_FLUSH_MS = 30_000;
 const BACKOFF_STEPS_MS = [5_000, 15_000, 60_000, 300_000];
 const POST_CHUNK_SIZE = 300;
+
+// Rate-limit polling: hits an UNDOCUMENTED Anthropic endpoint using Claude Code's own
+// locally-stored OAuth token, to surface real 5h/7d subscription quota utilization on the
+// dashboard (not derivable from local transcripts). Community tooling (claude-pulse,
+// usage-monitor-for-claude, Claude-Code-Usage-Monitor) converges on: 180s is a safe poll
+// interval, and the User-Agent header MUST look like a real Claude Code client or requests
+// land in an aggressively-limited bucket and 429 immediately. This endpoint isn't part of
+// Anthropic's public API surface and could change or disappear without notice.
+const RATE_LIMIT_POLL_MS = 180_000;
+const RATE_LIMIT_API_URL = "https://api.anthropic.com/api/oauth/usage";
+const CLAUDE_CODE_USER_AGENT = "claude-code/2.1.229";
 
 // ---------- logging ----------
 function log(...args) {
@@ -337,6 +349,69 @@ function triggerFlush() {
   flushQueue();
 }
 
+// ---------- rate-limit polling (5h/7d subscription quota) ----------
+function readOAuthToken() {
+  let cred;
+  try {
+    cred = JSON.parse(fs.readFileSync(CREDENTIALS_FILE, "utf8"));
+  } catch (err) {
+    log("WARN rate-limit poll: could not read credentials file:", err.message);
+    return null;
+  }
+  const oauth = cred.claudeAiOauth;
+  if (!oauth?.accessToken) {
+    log("WARN rate-limit poll: no claudeAiOauth.accessToken in credentials file");
+    return null;
+  }
+  if (oauth.expiresAt && Date.now() > oauth.expiresAt) {
+    log("WARN rate-limit poll: OAuth token expired, waiting for Claude Code to refresh it");
+    return null;
+  }
+  return oauth.accessToken;
+}
+
+async function pollRateLimits() {
+  const workerUrl = loadWorkerUrl();
+  if (!workerUrl) return;
+  const token = readOAuthToken();
+  if (!token) return;
+
+  let data;
+  try {
+    const res = await fetch(RATE_LIMIT_API_URL, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "anthropic-beta": "oauth-2025-04-20",
+        "User-Agent": CLAUDE_CODE_USER_AGENT,
+        "Content-Type": "application/json",
+      },
+    });
+    if (!res.ok) {
+      log(`WARN rate-limit poll: HTTP ${res.status} from Anthropic`);
+      return;
+    }
+    data = await res.json();
+  } catch (err) {
+    log("WARN rate-limit poll: request failed:", err.message);
+    return;
+  }
+
+  const payload = { ...data, captured_at: new Date().toISOString(), device_hostname: os.hostname() };
+  try {
+    const res = await fetch(`${workerUrl.replace(/\/$/, "")}/api/rate-limit`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    log(
+      `rate limits: 5h=${data.five_hour?.utilization ?? "?"}% 7d=${data.seven_day?.utilization ?? "?"}%`
+    );
+  } catch (err) {
+    log("WARN rate-limit poll: failed to push snapshot to Worker:", err.message);
+  }
+}
+
 // ---------- lifecycle ----------
 function setupFsWatch() {
   try {
@@ -360,8 +435,10 @@ async function main() {
   setupFsWatch();
   setInterval(scheduleScan, FALLBACK_RESCAN_MS); // belt-and-suspenders periodic rescan
   setInterval(triggerFlush, HEARTBEAT_FLUSH_MS); // recover after offline periods with no fs activity
+  setInterval(pollRateLimits, RATE_LIMIT_POLL_MS);
 
   await runScanCycle(); // initial backfill
+  pollRateLimits(); // fire once at startup too, don't wait a full interval
 
   for (const sig of ["SIGINT", "SIGTERM"]) {
     process.on(sig, () => {

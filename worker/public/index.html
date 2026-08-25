@@ -23,6 +23,17 @@
   </header>
 
   <main>
+    <section class="card" id="quota-card">
+      <h2>Claude 帳號配額(官方即時資料)</h2>
+      <p class="quota-disclaimer">
+        來源:Anthropic 未公開文件的用量端點,透過 Claude Code 本機的 OAuth 憑證查詢——不是官方保證穩定的 API,可能失效。
+      </p>
+      <div id="quota-body" class="quota-body">
+        <p class="quota-empty">尚無資料,等待監控程式第一次查詢…</p>
+      </div>
+      <p id="quota-captured" class="sync-status">&nbsp;</p>
+    </section>
+
     <section class="card week-card" id="week-card">
       <h2>本週用量(自週一起)</h2>
       <div class="week-body">
