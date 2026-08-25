@@ -6,3 +6,4 @@ watcher/state.json
 watcher/pending-queue.jsonl
 watcher/pending-queue.flushing.jsonl
 watcher/watcher.log
+.claude/settings.local.json

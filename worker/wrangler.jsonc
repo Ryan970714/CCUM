@@ -2,6 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "cc-usage-dashboard",
   "main": "src/index.js",
+  "account_id": "edf55bfd24ff92cf2a4a3b0f2ef1fe61",
   "compatibility_date": "2026-08-25",
   "assets": {
     "directory": "./public",
