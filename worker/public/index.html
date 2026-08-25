@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Claude Code 用量儀表板</title>
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-title">
+      <h1>Claude Code 用量儀表板</h1>
+      <p id="sync-status" class="sync-status">連線中…</p>
+    </div>
+    <nav class="range-selector" id="range-selector">
+      <button data-range="7d">7 天</button>
+      <button data-range="30d" class="active">30 天</button>
+      <button data-range="90d">90 天</button>
+      <button data-range="all">全部</button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="stat-grid" id="stat-grid" aria-label="用量統計">
+      <div class="stat-tile">
+        <span class="stat-label">總 Token 數</span>
+        <span class="stat-value" id="stat-total-tokens">—</span>
+      </div>
+      <div class="stat-tile">
+        <span class="stat-label">Input</span>
+        <span class="stat-value" id="stat-input">—</span>
+      </div>
+      <div class="stat-tile">
+        <span class="stat-label">Output</span>
+        <span class="stat-value" id="stat-output">—</span>
+      </div>
+      <div class="stat-tile">
+        <span class="stat-label">Cache 寫入</span>
+        <span class="stat-value" id="stat-cache-write">—</span>
+      </div>
+      <div class="stat-tile">
+        <span class="stat-label">Cache 讀取</span>
+        <span class="stat-value" id="stat-cache-read">—</span>
+      </div>
+      <div class="stat-tile stat-tile-highlight">
+        <span class="stat-label">預估等值費用 (USD)</span>
+        <span class="stat-value" id="stat-cost">—</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>每日用量趨勢</h2>
+      <div class="chart-wrap">
+        <canvas id="daily-chart" height="90"></canvas>
+      </div>
+    </section>
+
+    <div class="two-col">
+      <section class="card">
+        <h2>依專案分類</h2>
+        <div class="table-wrap">
+          <table id="project-table">
+            <thead>
+              <tr><th>專案</th><th>Token 數</th><th>預估費用</th><th>最近活動</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>依模型分類</h2>
+        <div class="table-wrap">
+          <table id="model-table">
+            <thead>
+              <tr><th>模型</th><th>次數</th><th>Token 數</th><th>預估費用</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <section class="card">
+      <h2>近期 Session</h2>
+      <div class="table-wrap">
+        <table id="session-table">
+          <thead>
+            <tr><th>Session</th><th>專案</th><th>最近活動</th><th>次數</th><th>Token 數</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>
+      費用為<strong>預估值</strong>,採用標準牌價換算,你目前是訂閱制、並非按 token 計費,實際帳單以
+      <a href="https://www.anthropic.com/pricing" target="_blank" rel="noopener">Anthropic 官方定價頁</a>
+      為準。資料來源:本機 Claude Code 對話紀錄,由本機監控程式即時同步。
+    </p>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

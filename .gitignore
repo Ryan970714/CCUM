@@ -1,0 +1,8 @@
+node_modules/
+.wrangler/
+worker/.wrangler/
+watcher/config.json
+watcher/state.json
+watcher/pending-queue.jsonl
+watcher/pending-queue.flushing.jsonl
+watcher/watcher.log
